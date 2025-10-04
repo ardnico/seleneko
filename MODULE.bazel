@@ -1,0 +1,9 @@
+module(name = "myproj", version = "0.1")
+
+bazel_dep(name = "rules_python", version = "0.36.0")
+
+python = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+python.parse(  # requirements.txt から @pip リポを作成
+    requirements_lock = "//:requirements.txt",
+)
+use_repo(python, "pip")

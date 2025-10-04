@@ -1,0 +1,11 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "unit",
+    srcs = ["pytest_main.py", "test_app.py"],
+    deps = [
+        "//app:core",
+        "@pip//:pytest",
+    ],
+    main = "pytest_main.py",  # pytestのエントリ
+)

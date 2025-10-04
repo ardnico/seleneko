@@ -33,23 +33,25 @@ class use_selenium(object):
         """
         self.conf.set_log()
         options = Options()
-        if self.conf.get_data("browser") in ["chrome","c"]:
+        browser_type = self.conf.get_data("browser")
+        if browser_type in ["chrome","c"]:
             # Google Chrome
             driver = webdriver.Chrome(**kwargs)
-        elif self.conf.get_data("browser") in ["headless_chrome","ch"]:
-            # Google (HeadlessMode))
+        elif browser_type in ["headless_chrome","ch"]:
+            # Google (HeadlessMode)
             options.add_argument('--headless')
             options.add_argument('--allow-insecure-localhost')
             options.add_argument('--ignore-certificate-errors')
-        elif self.conf.get_data("browser") in ["firefox","ff","fox"]:
+            driver = webdriver.Chrome(options=options, **kwargs)
+        elif browser_type in ["firefox","ff","fox"]:
             # firefox
             fp = webdriver.FirefoxProfile()
             fp.set_preference("browser.download.dir", self.conf.get_data("work_directory"))
-            driver = webdriver.Firefox(**kwargs)
-        elif self.conf.get_data("browser") in ["edge","e"]:
+            driver = webdriver.Firefox(firefox_profile=fp, **kwargs)
+        elif browser_type in ["edge","e"]:
             # Edge
             driver = webdriver.Edge(**kwargs)
-        elif self.conf.get_data("browser") in ["ie"]:
+        elif browser_type in ["ie"]:
             # IE
             self.conf.write_log("InternetExplorer's service is expired",species="INFO")
             return None
@@ -169,14 +171,14 @@ class use_selenium(object):
         methods = ["xpath"],
         nums = [3],
         waittimes = [2],
-        actions = [],
-        error_ignore = False,
-    ):
-        if len(keys)!=len(actions):
-            self.conf.write_log(f"keys' length and Actions' length are different keys' length: {str(len(keys))} actions' length: {str(len(actions))} ",species="ERROR")
-            raise Exception
+        actions = [
+            f"send_keys:{id}",
+            f"send_keys:{psw}",
+            "click",
+            ""
+        ]
         
-        for i,key in enumerate(keys):
+        for i, key in enumerate(keys):
             num = nums[i] if len(nums) > i else 3
             waittime = waittimes[i] if len(waittimes) > i else 2
             method = methods[i] if len(methods) > i else "xpath"
@@ -225,44 +227,44 @@ class use_selenium(object):
         actions = [
             f"send_keys:{id}",
             f"send_keys:{psw}",
-            "click",
-            ""
-        ]
-        driver.get(url)
-        for num,action in enumerate(actions):
-            self.get_web_element(driver=driver,key=paths[num], method = method, actions=[action],**kwargs)
-    
-    @conf.log_exception
-    def screenshot(
-        self,
-        driver = None,
-        size = (640,640),
-        name = 'ScreenShot',  #  name of screenshot
-        expa = 'png',  #  extention
-        digits = 3,
-    ):
-        ssnum = ""
-        files = glob.glob(os.path.join(self.conf.get_data("work_directory"),f"{str(name)}_*.{str(expa)}"))
-        os.makedirs(self.conf.get_data("work_directory"),exist_ok=True)
-        if len(files)==0:
-            for _ in range(digits):
-                ssnum +="0"
-        else:
-            tmp_numbers = [int(f.split("_")[-1].split(".")[0]) for f in files]
-            for i in range( 10 ** digits+1):
-                if i in tmp_numbers:
-                    continue
-                break
-            if i == 10 ** digits:
-                self.conf.write_log("The maximum number of screenshots that can be taken has been exceeded.",species="ERROR")
-                return
-            ssnum = str(i).zfill(digits)
-        self.conf.write_log("Screenshot number:"+ssnum,species="INFO")
-        filename = self.conf.get_data("work_directory")+ f'\\{name}_{ssnum}.{expa}'
-        driver.set_window_size(size[0] , size[1])
-        driver.save_screenshot(filename)
-    
-    @conf.log_exception
+            if action=="click":
+                element.click()
+            elif action=="clear":
+                element.clear()
+            elif action.find('send_keys')==0 or action.find('sendkeys')==0:
+                keyword = action[action.find(":")+1:]
+                element.send_keys(keyword)
+            elif action.find('enter')==0:
+                element.send_keys(Keys.ENTER)
+            elif action.find('select_by_index')==0:
+                keyword = action[action.find(":")+1:]
+                element.select_by_index(keyword)
+            elif action.find('select_by_visible_text')==0:
+                keyword = action[action.find(":")+1:]
+                element.select_by_visible_text(keyword)
+            elif action=='deselect_all':
+                element.deselect_all()
+            elif action.find('deselect_by_index')==0:
+                keyword = action[action.find(":")+1:]
+                element.deselect_by_index(keyword)
+            elif action.find('deselect_by_value')==0:
+                keyword = action[action.find(":")+1:]
+                element.deselect_by_value(keyword)
+            elif action.find('deselect_by_visible_text')==0:
+                keyword = action[action.find(":")+1:]
+                element.deselect_by_visible_text(keyword)
+            elif action.find('click_and_hold')==0:
+                keyword = action[action.find(":")+1:]
+                element.click_and_hold(keyword)
+            elif action.find('move_to_element')==0:
+                keyword = action[action.find(":")+1:]
+                element.move_to_element(keyword)
+            elif action=='key_down' or action=='down':
+                element.send_keys(Keys.DOWN)
+            elif action=='key_up' or action=='up':
+                element.send_keys(Keys.UP)
+            else:
+                self.conf.write_log(f"unknown action {action}",species="ERROR")
     def printhtml(
         self,
         driver = None,
@@ -284,18 +286,18 @@ class use_selenium(object):
     ):
         '''
         '''
-        if driver is None:
-            self.conf.write_log("please specify the web driver",species="ERROR")
-            raise Exception
-        if name == "":
-            driver.switch_to_window(driver.window_handles[-1])
-            return
+                elif action=='key_down' or action=='down':
+                    element.send_keys(Keys.DOWN)
+                elif action=='key_up' or action=='up':
+                    element.send_keys(Keys.UP)
+                driver.switch_to.window(driver.window_handles[-1])
+                return
         
         if driver.title == name:
             return
 
         for handle in driver.window_handles:
-            driver.switch_to_window(handle)
-            if driver.title == name:
-                return
+                driver.switch_to.window(handle)
+                if driver.title == name:
+                    return
         

@@ -1,22 +1,36 @@
-UseSel
-====
+# seleneko
 
+[![Python Version](https://img.shields.io/badge/Python-3.9-3776AB.svg?logo=python)]()
+[![Selenium Version](https://img.shields.io/badge/Selenium-4.35.0-43B02A.svg?logo=selenium)]()
+[![License](https://img.shields.io/badge/license-ApacheLicense2.0-019B8F?logo=apachelucene)]()
 
 ## Description
 
-1.  :  
+Seleneko supports your Selenium development.
+ex. await for accessing any site, handle any browsers, ...
 
-## Requirement
+| Requirement          |
+| -------------------- |
+| Python >= 3.9, < 4.0 |
+| selenium  = 4.35.0   |
 
-selenium
+## Install
+
+```bash
+pip install git+https://github.com/ardnico/seleneko
+```
+
+- For development
+
+```bash
+git clone https://github.com/ユーザー名/プロジェクト名.git
+cd プロジェクト名
+pip install -e ".[dev]"
+```
 
 ## Usage
 
 
-
-## Install
-
-pip install git+https://github.com/ardnico/UseSel
 
 ## Contribution
 

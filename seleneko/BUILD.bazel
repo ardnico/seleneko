@@ -1,0 +1,15 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+py_library(
+    name = "core",
+    srcs = ["app.py"],
+    # パッケージimportの都合でルートを足したい場合は imports を使う
+    # imports = ["."],
+    deps = ["@pip//:requests"],
+)
+
+py_binary(
+    name = "app",
+    srcs = ["app.py"],  # 小規模なら直でもOK。通常は :core に依存させる
+    deps = [":core"],
+)
