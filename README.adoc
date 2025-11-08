@@ -8,10 +8,12 @@ image::https://img.shields.io/badge/license-ApacheLicense2.0-019B8F?logo=apachel
 Seleneko supports your Selenium development.
 ex. await for accessing any site, handle any browsers, ...
 
-| Requirement          |
-| -------------------- |
-| Python >= 3.9, < 4.0 |
-| selenium  = 4.35.0   |
+[cols="1,1",options="header"]
+|===
+| Requirement | Version          
+| Python  | >= 3.9, < 4.0 
+| selenium | = 4.35.0   
+|===
 
 == Install
 
