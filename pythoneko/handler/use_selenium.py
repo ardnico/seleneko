@@ -1,303 +1,298 @@
-
 import os
-import glob
-import time
+import shutil
+import tempfile
+from dataclasses import dataclass
+from typing import Optional, Tuple, Iterable, Union
+
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.edge.options import Options as EdgeOptions
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-from .._config import config
 
-class use_selenium(object):
-    conf = config(name=__name__)
-    def __init__(
-        self,
-        browser="chrome",
-        work_directory=None,
-        **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.conf.set_data("browser",browser)
-        if work_directory is None:
-            work_directory = os.path.join(os.getcwd(),self.conf.get_date_str_ymd())
-        self.conf.set_data("work_directory",work_directory)
-    
-    def call_driver(
-        self,
-        size=(700,700),
-        **kwargs
-    ):
-        """_summary_
-        Args:
-            size (tuple, optional): browser size. Defaults to (700,700).
-        """
-        self.conf.set_log()
-        options = Options()
-        browser_type = self.conf.get_data("browser")
-        if browser_type in ["chrome","c"]:
-            # Google Chrome
-            driver = webdriver.Chrome(**kwargs)
-        elif browser_type in ["headless_chrome","ch"]:
-            # Google (HeadlessMode)
-            options.add_argument('--headless')
-            options.add_argument('--allow-insecure-localhost')
-            options.add_argument('--ignore-certificate-errors')
-            driver = webdriver.Chrome(options=options, **kwargs)
-        elif browser_type in ["firefox","ff","fox"]:
-            # firefox
-            fp = webdriver.FirefoxProfile()
-            fp.set_preference("browser.download.dir", self.conf.get_data("work_directory"))
-            driver = webdriver.Firefox(firefox_profile=fp, **kwargs)
-        elif browser_type in ["edge","e"]:
-            # Edge
-            driver = webdriver.Edge(**kwargs)
-        elif browser_type in ["ie"]:
-            # IE
-            self.conf.write_log("InternetExplorer's service is expired",species="INFO")
-            return None
-        else:
-            self.conf.write_log("Not Conpatible browser: " + self.conf.get_data('browser') ,species="INFO")
-            return None
-        driver.set_window_position(0,0)
-        driver.set_window_size(size[0],size[1])
-        return driver
-    
-    @conf.log_exception
-    def get_web_element(
-        self,
-        driver = None,
-        key = '',  # Search keyword
-        method = 'xpath',  # search method
-        num = 3,  # try count
-        waittime = 2,
-        action = "",
-    ):
-        if driver is None:
-            self.conf.write_log(f"driver is not selected",species="ERROR")
-            raise Exception
-        reitem = None
-        method_dic = {
-            "class"                 : By.CLASS_NAME
-            ,"class_name"           : By.CLASS_NAME
-            ,"classname"            : By.CLASS_NAME
-            ,"cn"                   : By.CLASS_NAME
-            ,"id"                   : By.ID
-            ,"name"                 : By.NAME
-            ,"link_text"            : By.LINK_TEXT
-            ,"linktext"             : By.LINK_TEXT
-            ,"link"                 : By.LINK_TEXT
-            ,"lt"                   : By.LINK_TEXT
-            ,"partial_link_text"    : By.PARTIAL_LINK_TEXT
-            ,"partiallink_text"     : By.PARTIAL_LINK_TEXT
-            ,"partial_linktext"     : By.PARTIAL_LINK_TEXT
-            ,"partiallinktext"      : By.PARTIAL_LINK_TEXT
-            ,"tag_name"             : By.TAG_NAME
-            ,"tagname"              : By.TAG_NAME
-            ,"tag"                  : By.TAG_NAME
-            ,"xpath"                : By.XPATH
-            ,"x"                    : By.XPATH
-            ,"css_selector"         : By.CSS_SELECTOR
-            ,"cssselector"          : By.CSS_SELECTOR
-            ,"css"                  : By.CSS_SELECTOR
-            ,"cs"                   : By.CSS_SELECTOR
-        }
-        for _ in range(num):
-            try:
-                if method in method_dic.keys():
-                    reitem = driver.find_element(method_dic[method],key)
-                    if action:
-                        self.done_action(element=reitem,action=action)
-                    return reitem
-                else:
-                    self.conf.write_log("no such elements",species="ERROR")
-                    raise Exception
-            except Exception as e:
-                time.sleep(waittime)
-                self.conf.write_log(f"error info {str(e)}",species="DEBUG")
-                self.conf.write_log(f"retry to get a web element: {key}\nmethod:{method}",species="DEBUG")
-        self.conf.write_log(f"failed to get a web element: {key}\nmethod:{method}",species="ERROR")
-        raise Exception
-    
-    @conf.log_exception
-    def done_action(
-            self,
-            element,
-            action,
-        ):
-        if action=="click":
-            element.click()
-        elif action=="clear":
-            element.clear()
-        elif action.find('send_keys')==0 or action.find('sendkeys')==0:
-            keyword = action[action.find(":")+1:]
-            element.send_keys(keyword)
-        elif action.find('enter')==0:
-            element.send_keys(Keys.ENTER)
-        elif action.find('select_by_index')==0:
-            keyword = action[action.find(":")+1:]
-            element.select_by_index(keyword)
-        elif action.find('select_by_visible_text')==0:
-            keyword = action[action.find(":")+1:]
-            element.select_by_visible_text(keyword)
-        elif action=='deselect_all':
-            element.deselect_all()
-        elif action.find('deselect_by_index')==0:
-            keyword = action[action.find(":")+1:]
-            element.deselect_by_index(keyword)
-        elif action.find('deselect_by_value')==0:
-            keyword = action[action.find(":")+1:]
-            element.deselect_by_value(keyword)
-        elif action.find('deselect_by_visible_text')==0:
-            keyword = action[action.find(":")+1:]
-            element.deselect_by_visible_text(keyword)
-        elif action.find('click_and_hold')==0:
-            keyword = action[action.find(":")+1:]
-            element.click_and_hold(keyword)
-        elif action.find('move_to_element')==0:
-            keyword = action[action.find(":")+1:]
-            element.move_to_element(keyword)
-        elif action=='key_down' or action=='down':
-            element.key_down('key_down')
-        elif action=='key_up' or action=='up':
-            element.key_down('key_up')
-        else:
-            self.conf.write_log(f"unknown action {action}",species="ERROR")
-    
-    @conf.log_exception
-    def action_web_element(
-        self,
-        driver = None,
-        keys = [],
-        methods = ["xpath"],
-        nums = [3],
-        waittimes = [2],
-        actions = [
-            f"send_keys:{id}",
-            f"send_keys:{psw}",
-            "click",
-            ""
-        ]
-        
-        for i, key in enumerate(keys):
-            num = nums[i] if len(nums) > i else 3
-            waittime = waittimes[i] if len(waittimes) > i else 2
-            method = methods[i] if len(methods) > i else "xpath"
-            try:
-                self.get_web_element(
-                driver = driver,
-                key = key,
-                method = method,
-                num = num,
-                waittime = waittime,
-                action = actions[i],
-                )
-            except Exception as e:
-                self.conf.write_log(f"error occured: {str(e)}",species="ERROR")
-                if error_ignore==False:
-                    raise Exception
-    
-    @conf.log_exception
-    def moveflame(
-        self,
-        driver = None,
-        key="",
-        method="xpath",
-        **args
-    ):
-        flame_item = self.get_web_element(driver = driver,key=key,method=method,**args)
+from .._config import config as _config  # 既存の conf をそのまま使う
+
+# ====== 設定データ ======
+@dataclass
+class DriverSettings:
+    browser: str = "chrome"                      # "chrome" | "firefox" | "edge" | "headless_chrome"
+    window_size: Tuple[int, int] = (700, 700)
+    headless: bool = True
+    download_dir: Optional[str] = None
+    page_load_strategy: str = "eager"            # "none" | "eager" | "normal"
+    images_enabled: bool = False                 # メモリ節約のため既定でオフ
+    timeout_sec: int = 15                        # 明示Waitの既定
+    tmp_profile: bool = True                     # 使い捨てプロファイルでリーク抑制
+
+# ====== 主要クラス ======
+class SeleniumClient:
+    """
+    省メモリ・高安定を狙った Selenium の薄いラッパ。
+    - コンテキストマネージャ対応で quit 漏れ防止
+    - 明示 Wait / 軽量オプション / 一時プロファイル
+    - 汎用ユーティリティ（要素取得・入力・クリック・フレーム/ウィンドウ切替）
+    """
+    conf = _config(name=__name__)
+
+    def __init__(self, settings: Optional[DriverSettings] = None, **kwargs):
+        self.settings = settings or DriverSettings()
+        # 互換: 既存コードが browser/work_directory を conf に書く前提を維持
+        self.conf.set_data("browser", self.settings.browser)
+        work_directory = kwargs.get("work_directory") or os.path.join(os.getcwd(), self.conf.get_date_str_ymd())
+        os.makedirs(work_directory, exist_ok=True)
+        self.conf.set_data("work_directory", work_directory)
+
+        self._driver = None
+        self._tmpdir = None  # user-data-dir 用
+
+    # ---- Context Manager ----
+    def __enter__(self):
+        self._driver = self._create_driver()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.quit()
+
+    # ---- Public API ----
+    @property
+    def driver(self):
+        if self._driver is None:
+            self._driver = self._create_driver()
+        return self._driver
+
+    def quit(self):
         try:
-            driver.switch_to.default_content()
-        except:
-            pass
-        driver.switch_to.frame(flame_item)
-    
-    @conf.log_exception
-    def login(
-        self,
-        driver,
-        url,
-        paths:list, # specify the xpath(idbox,passwordbox,button,check)
-        method="xpath",
-        **kwargs
-    ):
-        if len(paths)!=4:
-            waiting = input("specify the xpath(idbox,passwordbox,button,check)")
-            raise Exception
-        id, psw = self.conf.get_id()
-        actions = [
-            f"send_keys:{id}",
-            f"send_keys:{psw}",
-            if action=="click":
-                element.click()
-            elif action=="clear":
-                element.clear()
-            elif action.find('send_keys')==0 or action.find('sendkeys')==0:
-                keyword = action[action.find(":")+1:]
-                element.send_keys(keyword)
-            elif action.find('enter')==0:
-                element.send_keys(Keys.ENTER)
-            elif action.find('select_by_index')==0:
-                keyword = action[action.find(":")+1:]
-                element.select_by_index(keyword)
-            elif action.find('select_by_visible_text')==0:
-                keyword = action[action.find(":")+1:]
-                element.select_by_visible_text(keyword)
-            elif action=='deselect_all':
-                element.deselect_all()
-            elif action.find('deselect_by_index')==0:
-                keyword = action[action.find(":")+1:]
-                element.deselect_by_index(keyword)
-            elif action.find('deselect_by_value')==0:
-                keyword = action[action.find(":")+1:]
-                element.deselect_by_value(keyword)
-            elif action.find('deselect_by_visible_text')==0:
-                keyword = action[action.find(":")+1:]
-                element.deselect_by_visible_text(keyword)
-            elif action.find('click_and_hold')==0:
-                keyword = action[action.find(":")+1:]
-                element.click_and_hold(keyword)
-            elif action.find('move_to_element')==0:
-                keyword = action[action.find(":")+1:]
-                element.move_to_element(keyword)
-            elif action=='key_down' or action=='down':
-                element.send_keys(Keys.DOWN)
-            elif action=='key_up' or action=='up':
-                element.send_keys(Keys.UP)
-            else:
-                self.conf.write_log(f"unknown action {action}",species="ERROR")
-    def printhtml(
-        self,
-        driver = None,
-        file_name = 'print'  #  fille name
-    ):
-        '''
-        write as html file
-        '''
-        path = f'{file_name}.html'
-        with open(path, mode='w', encoding="utf-8") as f:
-            f.write(driver.page_source)
-        return
-    
-    @conf.log_exception
-    def get_handle(
-        self,
-        driver = None,
-        name = "", # title
-    ):
-        '''
-        '''
-                elif action=='key_down' or action=='down':
-                    element.send_keys(Keys.DOWN)
-                elif action=='key_up' or action=='up':
-                    element.send_keys(Keys.UP)
-                driver.switch_to.window(driver.window_handles[-1])
-                return
-        
-        if driver.title == name:
-            return
+            if self._driver:
+                self._driver.quit()
+        finally:
+            self._driver = None
+            # 一時プロファイルを破棄
+            if self._tmpdir and os.path.isdir(self._tmpdir):
+                shutil.rmtree(self._tmpdir, ignore_errors=True)
+                self._tmpdir = None
 
-        for handle in driver.window_handles:
-                driver.switch_to.window(handle)
-                if driver.title == name:
-                    return
-        
+    # ---- Driver creation ----
+    def _create_driver(self):
+        browser = (self.settings.browser or "").lower()
+        headless = self.settings.headless or browser in ("headless_chrome", "ch")
+        download_dir = self.settings.download_dir or self.conf.get_data("work_directory")
+        os.makedirs(download_dir, exist_ok=True)
+
+        page_load_strategy = self.settings.page_load_strategy
+
+        if browser in ("chrome", "c", "headless_chrome", "ch"):
+            options = ChromeOptions()
+            self._apply_common_chrome_flags(options, headless, images_enabled=self.settings.images_enabled)
+            options.page_load_strategy = page_load_strategy
+            # ダウンロード抑制 & ディレクトリ固定
+            prefs = {
+                "download.default_directory": download_dir,
+                "download.prompt_for_download": False,
+                "profile.default_content_setting_values.automatic_downloads": 1,
+            }
+            if not self.settings.images_enabled:
+                # 画像無効化（blink-settings が効かないケースの保険）
+                prefs["profile.managed_default_content_settings.images"] = 2
+            options.add_experimental_option("prefs", prefs)
+
+            if self.settings.tmp_profile:
+                self._tmpdir = tempfile.mkdtemp(prefix="selenium-profile-")
+                options.add_argument(f"--user-data-dir={self._tmpdir}")
+
+            service = ChromeService()  # 既存の chromedriver を PATH で解決する想定（オフライン運用向け）
+            driver = webdriver.Chrome(service=service, options=options)
+
+        elif browser in ("firefox", "ff", "fox"):
+            options = FirefoxOptions()
+            if headless:
+                options.add_argument("-headless")
+            options.page_load_strategy = page_load_strategy
+            # 画像無効は Firefox は about:config を使う（headless では体感差あり）
+            # user.js 書き込みを避けるため今回は最小限
+            profile_dir = None
+            if self.settings.tmp_profile:
+                profile_dir = tempfile.mkdtemp(prefix="selenium-profile-")
+                self._tmpdir = profile_dir
+                options.set_preference("browser.download.dir", download_dir)
+                options.set_preference("browser.download.folderList", 2)
+                options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/octet-stream")
+
+            service = FirefoxService()
+            driver = webdriver.Firefox(service=service, options=options)
+
+        elif browser in ("edge", "e"):
+            options = EdgeOptions()
+            self._apply_common_edge_flags(options, headless, images_enabled=self.settings.images_enabled)
+            options.page_load_strategy = page_load_strategy
+
+            if self.settings.tmp_profile:
+                self._tmpdir = tempfile.mkdtemp(prefix="selenium-profile-")
+                options.add_argument(f"--user-data-dir={self._tmpdir}")
+
+            service = EdgeService()
+            driver = webdriver.Edge(service=service, options=options)
+
+        else:
+            self.conf.write_log(f"Not compatible browser: {browser}", species="ERROR")
+            raise ValueError(f"Unsupported browser: {browser}")
+
+        # 既定タイムアウト（暗黙 Wait は 0。明示 Wait を使う）
+        driver.set_page_load_timeout(max(self.settings.timeout_sec, 5))
+        driver.set_script_timeout(max(self.settings.timeout_sec, 5))
+        driver.set_window_position(0, 0)
+        w, h = self.settings.window_size
+        driver.set_window_size(w, h)
+        return driver
+
+    # ---- Chrome/Edge flags ----
+    def _apply_common_chrome_flags(self, options: ChromeOptions, headless: bool, images_enabled: bool):
+        if headless:
+            # new の方が描画系プロセスが少なく安定
+            options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--mute-audio")
+        options.add_argument("--disable-notifications")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--window-position=0,0")
+        options.add_argument("--log-level=3")
+        options.add_argument("--allow-insecure-localhost")
+        options.add_argument("--ignore-certificate-errors")
+        # 画像停止（効く環境の保険）
+        if not images_enabled:
+            options.add_argument("--blink-settings=imagesEnabled=false")
+
+    def _apply_common_edge_flags(self, options: EdgeOptions, headless: bool, images_enabled: bool):
+        # Edge は Chromium ベース
+        if headless:
+            options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--mute-audio")
+        options.add_argument("--disable-notifications")
+        if not images_enabled:
+            options.add_argument("--blink-settings=imagesEnabled=false")
+
+    # ===== 要素ユーティリティ =====
+    _METHOD_MAP = {
+        "class": By.CLASS_NAME, "class_name": By.CLASS_NAME, "classname": By.CLASS_NAME, "cn": By.CLASS_NAME,
+        "id": By.ID, "name": By.NAME,
+        "link_text": By.LINK_TEXT, "linktext": By.LINK_TEXT, "link": By.LINK_TEXT, "lt": By.LINK_TEXT,
+        "partial_link_text": By.PARTIAL_LINK_TEXT, "plt": By.PARTIAL_LINK_TEXT,
+        "tag_name": By.TAG_NAME, "tag": By.TAG_NAME,
+        "xpath": By.XPATH, "x": By.XPATH,
+        "css_selector": By.CSS_SELECTOR, "cssselector": By.CSS_SELECTOR, "css": By.CSS_SELECTOR, "cs": By.CSS_SELECTOR,
+    }
+
+    def find(self, key: str, method: str = "xpath", timeout: Optional[int] = None):
+        """明示 Wait で単一要素を取得。"""
+        by = self._METHOD_MAP.get(method.lower())
+        if not by:
+            raise ValueError(f"Unknown locator method: {method}")
+        wait = WebDriverWait(self.driver, timeout or self.settings.timeout_sec)
+        return wait.until(EC.presence_of_element_located((by, key)))
+
+    def find_visible(self, key: str, method: str = "xpath", timeout: Optional[int] = None):
+        by = self._METHOD_MAP.get(method.lower())
+        if not by:
+            raise ValueError(f"Unknown locator method: {method}")
+        wait = WebDriverWait(self.driver, timeout or self.settings.timeout_sec)
+        return wait.until(EC.visibility_of_element_located((by, key)))
+
+    def click(self, key: str, method: str = "xpath", timeout: Optional[int] = None):
+        by = self._METHOD_MAP.get(method.lower())
+        wait = WebDriverWait(self.driver, timeout or self.settings.timeout_sec)
+        elem = wait.until(EC.element_to_be_clickable((by, key)))
+        elem.click()
+        return elem
+
+    def type_text(self, key: str, text: str, method: str = "xpath", clear_first: bool = True, enter: bool = False):
+        elem = self.find_visible(key, method)
+        if clear_first:
+            try:
+                elem.clear()
+            except Exception:
+                pass
+        elem.send_keys(text)
+        if enter:
+            elem.send_keys(Keys.ENTER)
+        return elem
+
+    def select_by_text(self, key: str, visible_text: str, method: str = "xpath"):
+        elem = self.find_visible(key, method)
+        Select(elem).select_by_visible_text(visible_text)
+        return elem
+
+    def select_by_index(self, key: str, index: int, method: str = "xpath"):
+        elem = self.find_visible(key, method)
+        Select(elem).select_by_index(index)
+        return elem
+
+    # ===== フレーム/ウィンドウ =====
+    def switch_to_frame(self, key: Union[str, int] = 0, method: str = "xpath"):
+        """key が int のときは index、str のときはロケータで切替。"""
+        self.driver.switch_to.default_content()
+        if isinstance(key, int):
+            self.driver.switch_to.frame(key)
+        else:
+            frame_elem = self.find(key, method)
+            self.driver.switch_to.frame(frame_elem)
+
+    def switch_to_window_by_title(self, title: str, timeout: Optional[int] = None):
+        wait = WebDriverWait(self.driver, timeout or self.settings.timeout_sec)
+        wait.until(lambda d: any(self._switch_if_title(d, h, title) for h in d.window_handles))
+
+    @staticmethod
+    def _switch_if_title(driver, handle, title) -> bool:
+        driver.switch_to.window(handle)
+        return driver.title == title
+
+    # ===== ページ取得系 =====
+    def get(self, url: str):
+        """eager戦略＋明示Wait前提で高速遷移。"""
+        self.driver.get(url)
+        # 画面が軽く落ち着くまで短い待機（DOMの初期化を待つ）
+        WebDriverWait(self.driver, max(3, min(6, self.settings.timeout_sec))).until(
+            lambda d: d.execute_script("return document.readyState") in ("interactive", "complete")
+        )
+
+    def save_html(self, path: str):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.driver.page_source)
+
+    # ===== ログイン・シナリオ例 =====
+    def login(self, url: str, user_locator: Tuple[str, str], pass_locator: Tuple[str, str],
+              button_locator: Tuple[str, str], userid: str, password: str):
+        """
+        ログイン共通パターン（余計な retry を廃し、Wait で最短完了）
+        locators: (method, key) のタプル
+        """
+        self.get(url)
+        self.type_text(user_locator[1], userid, method=user_locator[0], clear_first=True)
+        self.type_text(pass_locator[1], password, method=pass_locator[0], clear_first=True)
+        self.click(button_locator[1], method=button_locator[0])
+
+# ===== 使用例 =====
+# with SeleniumClient(DriverSettings(browser="chrome", headless=True)) as cli:
+#     cli.get("https://example.com")
+#     title = cli.driver.title
+#     cli.save_html(os.path.join(cli.conf.get_data("work_directory"), "page.html"))
+#     # ログイン例:
+#     # cli.login(
+#     #     url="https://example.com/login",
+#     #     user_locator=("id", "username"),
+#     #     pass_locator=("id", "password"),
+#     #     button_locator=("css", "button[type=submit]"),
+#     #     userid="YOUR_ID",
+#     #     password="YOUR_PASS",
+#     # )
