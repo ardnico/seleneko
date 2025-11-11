@@ -16,7 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 
-from .._config import config as _config  # 既存の conf をそのまま使う
+from ..core import config as _config  # 既存の conf をそのまま使う
 
 # ====== 設定データ ======
 @dataclass
@@ -282,17 +282,192 @@ class SeleniumClient:
         self.type_text(pass_locator[1], password, method=pass_locator[0], clear_first=True)
         self.click(button_locator[1], method=button_locator[0])
 
-# ===== 使用例 =====
-# with SeleniumClient(DriverSettings(browser="chrome", headless=True)) as cli:
-#     cli.get("https://example.com")
-#     title = cli.driver.title
-#     cli.save_html(os.path.join(cli.conf.get_data("work_directory"), "page.html"))
-#     # ログイン例:
-#     # cli.login(
-#     #     url="https://example.com/login",
-#     #     user_locator=("id", "username"),
-#     #     pass_locator=("id", "password"),
-#     #     button_locator=("css", "button[type=submit]"),
-#     #     userid="YOUR_ID",
-#     #     password="YOUR_PASS",
-#     # )
+
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    StaleElementReferenceException,
+    TimeoutException,
+    JavascriptException,
+)
+
+# ===================== 追加：内部ユーティリティ =====================
+
+def _sleep_short(seconds: float, driver):
+    # 極短い安定化待ち（暗黙 wait 0 前提）
+    driver.execute_script("return 0")  # イベントループを一度回す
+    import time; time.sleep(seconds)
+
+def _exp_backoff(attempt: int, base: float = 0.15, cap: float = 1.2) -> float:
+    import math
+    return min(cap, base * (2 ** max(0, attempt-1)))
+
+
+# ===================== 追加：成功条件ビルダ =====================
+# 呼び出し時に success=... で渡して使う。
+# 例: success=self.expect_url_change(), success=self.expect_appears(("css","#dashboard"))
+def expect_url_change(self, from_url: str = None, timeout: Optional[int] = None):
+    def cond(driver):
+        return (driver.current_url != from_url) if from_url else False
+    return {"callable": cond, "timeout": timeout}
+
+def expect_appears(self, locator: Tuple[str, str], timeout: Optional[int] = None):
+    method, key = locator
+    by = self._METHOD_MAP[method.lower()]
+    def cond(driver):
+        try:
+            return driver.find_element(by, key) is not None
+        except Exception:
+            return False
+    return {"callable": cond, "timeout": timeout}
+
+def expect_disappears(self, locator: Tuple[str, str], timeout: Optional[int] = None):
+    method, key = locator
+    by = self._METHOD_MAP[method.lower()]
+    def cond(driver):
+        try:
+            driver.find_element(by, key)
+            return False
+        except Exception:
+            return True
+    return {"callable": cond, "timeout": timeout}
+
+def expect_value_set(self, locator: Tuple[str, str], expected: str, timeout: Optional[int] = None):
+    method, key = locator
+    by = self._METHOD_MAP[method.lower()]
+    def cond(driver):
+        try:
+            el = driver.find_element(by, key)
+            return (el.get_attribute("value") or "") == expected
+        except Exception:
+            return False
+    return {"callable": cond, "timeout": timeout}
+
+
+# ===================== 追加：中心点が覆われていないかの判定 =====================
+def _is_center_clickable(self, element) -> bool:
+    try:
+        rect = self.driver.execute_script("""
+            const r = arguments[0].getBoundingClientRect();
+            return {x: Math.floor(r.left + r.width/2), y: Math.floor(r.top + r.height/2)};
+        """, element)
+        if rect is None:
+            return True  # 取れなければ判定不能→許容
+        x, y = rect["x"], rect["y"]
+        top_elem = self.driver.execute_script("return document.elementFromPoint(arguments[0], arguments[1]);", x, y)
+        if top_elem is None:
+            return True
+        # クリック対象自身か、その子孫ならOK
+        return self.driver.execute_script("""
+            let e = arguments[0], t = arguments[1];
+            while (t) { if (t === e) return true; t = t.parentElement; }
+            return false;
+        """, element, top_elem) is True
+    except JavascriptException:
+        return True
+
+
+# ===================== 追加：堅牢クリック =====================
+def click_smart(self, locator: Tuple[str, str], timeout: Optional[int] = None,
+                attempts: int = 4, success: Optional[dict] = None):
+    """
+    クリックが“効いた”ことまで検証してリトライ。
+    - locator: ("css", "#login"), ("xpath", "//button[...]") など
+    - success: self.expect_xxx() で作った条件（URL変化、要素出現/消滅、値設定など）
+    """
+    method, key = locator
+    by = self._METHOD_MAP[method.lower()]
+    success_callable = success["callable"] if success else None
+    success_timeout = success.get("timeout") if success else None
+    wait_timeout = timeout or self.settings.timeout_sec
+
+    last_err = None
+    for i in range(1, attempts+1):
+        try:
+            # 要素がクリック可能になるまで待つ
+            elem = WebDriverWait(self.driver, wait_timeout).until(EC.element_to_be_clickable((by, key)))
+            # スクロールして位置を安定化
+            self.driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'center'});", elem)
+            _sleep_short(0.05, self.driver)
+
+            # 覆い被さり検出（ヘッドフルでありがち）
+            if not self._is_center_clickable(elem):
+                # 微小スクロールで再トライ
+                self.driver.execute_script("window.scrollBy(0, -40);")
+                _sleep_short(0.06, self.driver)
+
+            # 1) 通常クリック
+            try:
+                elem.click()
+            except (ElementClickInterceptedException, StaleElementReferenceException):
+                # 2) Actions クリック
+                try:
+                    from selenium.webdriver import ActionChains
+                    ActionChains(self.driver).move_to_element(elem).pause(0.01).click().perform()
+                except Exception:
+                    # 3) JS クリック
+                    self.driver.execute_script("arguments[0].click();", elem)
+
+            # 成功条件の検証
+            if success_callable:
+                # 成功待ち（短め、個別指定があればそれを使用）
+                ok = WebDriverWait(self.driver, success_timeout or max(2, int(wait_timeout/2))).until(lambda d: success_callable(d))
+                if ok:
+                    return True
+            else:
+                # 明示の成功条件がない場合は「短い待機 + 例外なし」を成功とみなす
+                _sleep_short(0.08, self.driver)
+                return True
+
+        except TimeoutException as e:
+            last_err = e
+        except Exception as e:
+            last_err = e
+
+        # 失敗 → バックオフして再試行
+        self.conf.write_log(f"click_smart retry {i}/{attempts} for {locator}: {type(last_err).__name__} {last_err}", species="WARNING")
+        _sleep_short(_exp_backoff(i), self.driver)
+
+    # 全滅
+    if last_err:
+        self.conf.write_log(f"click_smart failed for {locator}: {type(last_err).__name__} {last_err}", species="ERROR")
+    raise last_err or TimeoutException(f"click_smart timed out: {locator}")
+
+
+# ===================== 追加：堅牢入力（検証付き） =====================
+def type_text_smart(self, locator: Tuple[str, str], text: str, clear_first: bool = True,
+                    press_enter: bool = False, timeout: Optional[int] = None, attempts: int = 3):
+    method, key = locator
+    by = self._METHOD_MAP[method.lower()]
+    wait_timeout = timeout or self.settings.timeout_sec
+    last_err = None
+
+    for i in range(1, attempts+1):
+        try:
+            elem = WebDriverWait(self.driver, wait_timeout).until(EC.visibility_of_element_located((by, key)))
+            self.driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'center'});", elem)
+            if clear_first:
+                try: elem.clear()
+                except Exception: pass
+            elem.send_keys(text)
+            if press_enter:
+                elem.send_keys(Keys.ENTER)
+
+            # 値が入ったか検証
+            val = elem.get_attribute("value") or ""
+            if val == text or (press_enter and text in val):
+                return True
+            self.driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", elem, text)
+            _sleep_short(0.05, self.driver)
+            val2 = elem.get_attribute("value") or ""
+            if val2 == text:
+                if press_enter: elem.send_keys(Keys.ENTER)
+                return True
+
+        except Exception as e:
+            last_err = e
+
+        self.conf.write_log(f"type_text_smart retry {i}/{attempts} for {locator}: {last_err}", species="WARNING")
+        _sleep_short(_exp_backoff(i), self.driver)
+
+    raise last_err or TimeoutException(f"type_text_smart timed out: {locator}")
+
