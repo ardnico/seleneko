@@ -5,7 +5,7 @@ seleneko
 Selenium-based automation toolkit.
 """
 from .core import config, encrypter
-from .automation.browser_client import SeleniumClient, DriverSettings
+from .automation import SeleniumClient, DriverSettings
 
 __all__ = [
     "config",
