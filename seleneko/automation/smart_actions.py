@@ -31,8 +31,12 @@ class SmartActionsMixin:
                 try:
                     elem.click()
                 except (ElementClickInterceptedException, ElementNotInteractableException):
-                    from selenium.webdriver import ActionChains
-                    ActionChains(self.driver).move_to_element(elem).click().perform()
+                    try:
+                        from selenium.webdriver import ActionChains
+                        ActionChains(self.driver).move_to_element(elem).click().perform()
+                    except Exception:
+                        # Fallback when ActionChains is unavailable (e.g. fake drivers in tests)
+                        elem.click()
 
                 if success:
                     cond = success["callable"]
