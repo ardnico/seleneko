@@ -40,6 +40,21 @@ class SeleniumClient:
             self._driver, self._tmpdir = create_driver(self.settings, self.conf)
         return self._driver
 
+    @driver.setter
+    def driver(self, value):
+        """Allow tests or callers to inject or replace the active driver."""
+        if value is None:
+            self.quit()
+            return
+        if self._driver and self._driver is not value:
+            try:
+                self._driver.quit()
+            except Exception:
+                pass
+            cleanup_tmpdir(self._tmpdir)
+            self._tmpdir = None
+        self._driver = value
+
     def quit(self):
         try:
             if self._driver:

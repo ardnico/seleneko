@@ -29,6 +29,12 @@ class FakeElement:
     def get_attribute(self, key):
         return self.attrs.get(key)
 
+    def is_displayed(self):
+        return self.attrs.get("displayed", True)
+
+    def is_enabled(self):
+        return not self.attrs.get("disabled", False)
+
 
 class FakeDriver:
     """Selenium WebDriver 互換の軽量モック"""
