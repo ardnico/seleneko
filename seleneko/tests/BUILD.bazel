@@ -1,0 +1,13 @@
+py_test(
+    name = "seleneko_tests",
+    srcs = [
+        "test_browser_client.py",
+        "pytest_main.py",
+        "__init__.py",
+        "conftest.py",
+    ],
+    deps = [
+        requirement("pytest"),
+        requirement("selenium"),
+    ],
+)
