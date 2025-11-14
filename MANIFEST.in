@@ -1,7 +1,3 @@
 include LICENSE
 include NOTICE
 include README.md
-
-[options.entry_points]
-console_scripts =
-    seleneko = seleneko.__main__:main

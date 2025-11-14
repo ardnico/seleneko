@@ -18,13 +18,13 @@
 ## 📦 インストール
 
 ```
-pip install seleneko
+pip install git+https://github.com/ardnico/seleneko
 ```
 
 もしくは開発版として：
 
 ```
-git clone https://github.com/yourname/seleneko.git
+git clone https://github.com/ardnico/seleneko.git
 cd seleneko
 pip install -e .
 ```
@@ -99,15 +99,15 @@ pytest
 
 ## 📜 ライセンス
 
-MIT License  
-Copyright (c) 2025 Niko
+Apache License 2.0
+(C) 2025 Nico
 
 ---
 
 ## 🌐 プロジェクト情報
 
-- **リポジトリ**: [https://github.com/yourname/seleneko](https://github.com/yourname/seleneko)
-- **PyPI**: [https://pypi.org/project/seleneko](https://pypi.org/project/seleneko)
-- **作者**: Niko
+- **リポジトリ**: [https://github.com/ardnico/seleneko](https://github.com/ardnico/seleneko)
+- **PyPI**: *準備中*
+- **作者**: Nico
 - **対応環境**: Python 3.9+
 
